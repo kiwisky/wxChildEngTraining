@@ -1,75 +1,52 @@
 <?php
+/*
+    方倍工作室 http://www.fangbei.org/
+    CopyRight 2016 All Rights Reserved
+*/
 header('Content-type:text');
 
-ob_clean();
-date_default_timezone_set('Asia/Shanghai');
-define('SYSPATH', "/wwwdata/wxapp/");
-define("WX_APP_LOG_FILE", "weixin.log");
-define("TOKEN", "BDk6JfKkZZlKv25GvCgWc");
-require_once (SYSPATH . 'Util.php');
-require_once 'AipSpeech.php';
-require_once 'UploadMedia.php';
+define("TOKEN", "weixin");
+
 $wechatObj = new wechatCallbackapiTest();
 if (!isset($_GET['echostr'])) {
     $wechatObj->responseMsg();
 }else{
-    $wechatObj->valid();
-    exit;
+    //$wechatObj->valid();
+    $echoStr = $_GET["echostr"];
+    $signature = $_GET["signature"];
+    $timestamp = $_GET["timestamp"];
+    $nonce = $_GET["nonce"];
+    $token = TOKEN;
+    $tmpArr = array($token, $timestamp, $nonce);
+    sort($tmpArr, SORT_STRING);
+    $tmpStr = implode($tmpArr);
+    $tmpStr = sha1($tmpStr);
+
+    if($tmpStr == $signature){
+    	  $wechatObj->logger("signature is correct.");
+        echo $echoStr;
+        return $echoStr;
+    }
 }
 
 class wechatCallbackapiTest
 {
-    private static $AccessTokenFile = 'accesstoken.txt';
-    private static $APPID = "wx4b0408a2f732d560";
-    private static $APPSECRET = "edd818cb9cfb39ec472107f045aba749";
-
     //验证签名
     public function valid()
     {
-	$echoStr = $_GET["echostr"];
-    	$signature = $_GET["signature"];
-    	$timestamp = $_GET["timestamp"];
-    	$nonce = $_GET["nonce"];
-    	$token = TOKEN;
-    	$tmpArr = array($token, $timestamp, $nonce);
-    	sort($tmpArr, SORT_STRING);
-    	$tmpStr = implode($tmpArr);
-    	$tmpStr = sha1($tmpStr);
-
-	if($tmpStr == $signature){
+        $echoStr = $_GET["echostr"];
+        $signature = $_GET["signature"];
+        $timestamp = $_GET["timestamp"];
+        $nonce = $_GET["nonce"];
+        $token = TOKEN;
+        $tmpArr = array($token, $timestamp, $nonce);
+        sort($tmpArr, SORT_STRING);
+        $tmpStr = implode($tmpArr);
+        $tmpStr = sha1($tmpStr);
+        if($tmpStr == $signature){
             echo $echoStr;
-            return $echoStr;
-    	}
-    }
-
-    public function getAccessToken(){
-	if(file_exists(self::$AccessTokenFile) && ($token = file_get_contents(self::$AccessTokenFile))){
-	    $now = time();
-	    $fstat = stat(self::$AccessTokenFile);
-	    if(($now - $fstat['mtime']) <= 7100){//the max is 7200 seconds
-                Wx_Log::debug(__METHOD__, "token from file: " . $token);
-	        return $token;
-	    }
-	}
-        $url = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=";
-	$url .= self::$APPID . "&secret=" . self::$APPSECRET;
-	$resp = "";
-        Util::request($url,$resp);
-	Wx_Log::info(__METHOD__, "url: $url, resp: " . $resp, __FILE__, __LINE__);
-	$resp = json_decode($resp);
-	if(is_object($resp) && $resp->access_token){
-	    if(!file_put_contents(self::$AccessTokenFile,$resp->access_token)){
-                Wx_Log::error(__METHOD__ , "Failed to write AccessToken to file " . self::$AccessTokenFile);
- 	    }
-	    return $resp->access_token;
-	}else{
-	    if($resp->errmsg){
-                Wx_Log::error(__METHOD__ , "Failed to get AccessToken. Reason: " . $resp->errmsg, __FILE__, __LINE__);
-	    }else{
-	        Wx_Log::error(__METHOD__ , "Failed to get AccessToken.",__FILE__, __LINE__);
-	    }
-	}
-	return "";
+            exit;
+        }
     }
 
     //响应消息
@@ -77,10 +54,10 @@ class wechatCallbackapiTest
     {
         $postStr = $GLOBALS["HTTP_RAW_POST_DATA"];
         if (!empty($postStr)){
-            Wx_Log::info(__METHOD__ ,"R \r\n".$postStr);
+            $this->logger("R \r\n".$postStr);
             $postObj = simplexml_load_string($postStr, 'SimpleXMLElement', LIBXML_NOCDATA);
             $RX_TYPE = trim($postObj->MsgType);
-
+            
             //消息类型分离
             switch ($RX_TYPE)
             {
@@ -100,7 +77,7 @@ class wechatCallbackapiTest
                     $result = $this->receiveVoice($postObj);
                     break;
                 case "video":
-		case "shortvideo":
+				case "shortvideo":
                     $result = $this->receiveVideo($postObj);
                     break;
                 case "link":
@@ -110,7 +87,7 @@ class wechatCallbackapiTest
                     $result = "unknown msg type: ".$RX_TYPE;
                     break;
             }
-            Wx_Log::info("T \r\n".$result);
+            $this->logger("T \r\n".$result);
             echo $result;
         }else {
             echo "";
@@ -217,7 +194,7 @@ class wechatCallbackapiTest
         if (strstr($keyword, "文本")){
             $content = "这是个文本消息";
         }else if (strstr($keyword, "表情")){
-            $content = "This is a smile";
+            $content = "微笑：/::)\n乒乓：/:oo\n太阳：☀\n仙人掌：🌵\n玉米：🌽\n蘑菇：🍄\n皇冠：👑";
         }else if (strstr($keyword, "链接")){
             $content = "电话号码：0755-87654321\n\n电子邮件：12345@qq.com\n\n公司网址：<a href='http://xw.qq.com/index.htm'>腾讯网</a>";
         }else if (strstr($keyword, "单图文") || strstr($keyword, "图文1")){
@@ -307,110 +284,17 @@ class wechatCallbackapiTest
         return $result;
     }
 
-    private function getVoiceText($acsToken, $object, $BAclient)
-    {
-        /*/get the voice data
-	if (!file_exists(self::$DOWNLOADDIR) && !mkdir(self::$DOWNLOADDIR, 0777, true)) {
-            return NULL;
-        }
-	$voiceDir = self::$DOWNLOADDIR . '/voice';
-	if (!file_exists($voiceDir) && !mkdir($voiceDir, 0777, true)) {
-            return NULL;
-        }*/
-        $url = "https://api.weixin.qq.com/cgi-bin/media/get?access_token=$acsToken&media_id=";
-	$url .= $object->MediaId;
-	$voiceData = "";
-	$filename = $voiceDir . "/" . $object->MediaId . ".amr";
-        if(!Util::request($url,$voiceData) || !$voiceData){
-	    return NULL;
-	}
-	//file_put_contents($filename, $resp);
-
-	//translate voice to text by Baidu Aip
-	/*$respObj = $BAclient->asr(file_get_contents('./php/16k-23850.amr'), 'amr', 16000, array(
-            'dev_pid' => 1737,
-	));*/
-	//The amr voice data is 8K from Weixin. 1737: Englist, 1537: Chinese mandarin
-	$respObj = $BAclient->asr($voiceData, 'amr', 8000, array(
-            'dev_pid' => 1737
-        ));
-
-	if(!$respObj || $respObj['err_no'] != 0){
-            Wx_Log::error(__METHOD__, "Can not translate the voice to text. Reason: " . $respObj['err_msg'], __FILE__, __LINE__);
-            return NULL;
-	}
-	Wx_Log::info(__METHOD__, "The voice text is: " . $respObj['result'][0], __FILE__, __LINE__);
-	return $respObj['result'][0];
-
-	/*/Add file
-	$url = "http://api.weixin.qq.com/cgi-bin/media/voice/addvoicetorecofortext?access_token=$acsToken&format=";
-	$url .= $object->Format . "&voice_id=" . $object->MediaId . "&lang=en_US";
-	$resp = "";
-        if(! Util::request($url,$resp,'POST')){
-	    return NULL;	    
-	}
-	$resp = json_decode($resp);
-	if($resp->errmsg != "ok" || $resp->errcode){
-           return NULL;
-        }
-	//get the text result
-        $url = "http://api.weixin.qq.com/cgi-bin/media/voice/queryrecoresultfortext?access_token=$acsToken&voice_id=";
-        $url .= $object->MediaId . "&lang=en_US";
-        $resp = "";
-        if(true ==  Util::request($url, $resp, 'POST')){
-            $resp = json_decode($resp);
-    	    if(!$resp->result){
-                Wx_Log::debug(__METHOD__, "Sleep one second and try again.");
-	    	return $resp;
-            }else{
-	        Wx_Log::info(__METHOD__, "The voice text is: " . $resp->result, __FILE__, __LINE__);
-	        return $resp->result;
-	    }
-	}*/
-    }
-   
-    //获取TTS的media id 
-    private function getSpeech($content,$acsToken,$BAclient)
-    {
-
-        $result = $BAclient->synthesis($content, 'zh', 1, array(
-            'vol' => 5,
-        ));
-        $mediaid='';
-        if(!is_array($result)){
-            $updatemedia= new UploadMedia();
-            $mediaid = $updatemedia->getMediaId($result,$acsToken);
-        }
-        else{
-           Wx_Log::error(__METHOD__ , "Failed to get speech.",__FILE__, __LINE__);
-        }
-        return $mediaid;
-    }
- 
     //接收语音消息
     private function receiveVoice($object)
     {
-        $acsToken = $this->getAccessToken();
-	if(! $acsToken){
-            if (isset($object->Recognition) && !empty($object->Recognition)){
-                $content = "你刚才说的是：".$object->Recognition;
-                $result = $this->transmitText($object, $content);
-            }else{
-                $content = array("MediaId"=>$object->MediaId);
-                $result = $this->transmitVoice($object, $content);
-            }
-            return $result;
-	}
-	$BAclient = new AipSpeech('11440204', 'YQctYSTzD9zGfuON13cYDLgI', 'xTe7pBehRFHwf8IOgHBQKPxNeu0MVEHS');
-	//step 1: voice to text
-	$voiceTxt = $this->getVoiceText($acsToken, $object, $BAclient);
-	//step 2: get the response with voice text
-	//step 3: reply text to voice
-        $voiceTxt='who are you';
-        $mediaid = $this->getSpeech($voiceTxt,$acsToken,$BAclient);
-        $voiceArray = array("MediaId"=>$mediaid);
-        $result = $this->transmitVoice($object,$voiceArray);
-	return $result;	
+        if (isset($object->Recognition) && !empty($object->Recognition)){
+            $content = "你刚才说的是：".$object->Recognition;
+            $result = $this->transmitText($object, $content);
+        }else{
+            $content = array("MediaId"=>$object->MediaId);
+            $result = $this->transmitVoice($object, $content);
+        }
+        return $result;
     }
 
     //接收视频消息
@@ -583,26 +467,25 @@ $item_str    </Articles>
         $result = sprintf($xmlTpl, $object->FromUserName, $object->ToUserName, time());
         return $result;
     }
-}
 
-//日志记录
-function logger($log_content)
-{
-    if(isset($_SERVER['HTTP_APPNAME'])){   //SAE
-        sae_set_display_errors(false);
-        sae_debug($log_content);
-        sae_set_display_errors(true);
-    }else if($_SERVER['REMOTE_ADDR'] != "127.0.0.1"){ //LOCAL
-        $max_size = 1000000;
-        $log_filename = "weixin.log";
-        if(file_exists($log_filename) and (abs(filesize($log_filename)) > $max_size)){unlink($log_filename);}
-        file_put_contents($log_filename, date('Y-m-d H:i:s')." ".$log_content."\r\n", FILE_APPEND);
-    }else{
-         $max_size = 1000000;
-         $log_filename = "weixin.log";
-         if(file_exists($log_filename) and (abs(filesize($log_filename)) > $max_size)){unlink($log_filename);}
+    //日志记录
+    private function logger($log_content)
+    {
+        if(isset($_SERVER['HTTP_APPNAME'])){   //SAE
+            sae_set_display_errors(false);
+            sae_debug($log_content);
+            sae_set_display_errors(true);
+        }else if($_SERVER['REMOTE_ADDR'] != "127.0.0.1"){ //LOCAL
+            $max_size = 1000000;
+            $log_filename = "weixin.log";
+            if(file_exists($log_filename) and (abs(filesize($log_filename)) > $max_size)){unlink($log_filename);}
+            file_put_contents($log_filename, date('Y-m-d H:i:s')." ".$log_content."\r\n", FILE_APPEND);
+        }else{
+        	  $max_size = 1000000;
+            $log_filename = "weixin.log";
+            if(file_exists($log_filename) and (abs(filesize($log_filename)) > $max_size)){unlink($log_filename);}
             file_put_contents($log_filename, date('Y-m-d H:i:s')." ".$log_content."\r\n", FILE_APPEND);
         }
+    }
 }
-
 ?>

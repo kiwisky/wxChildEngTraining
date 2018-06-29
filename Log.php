@@ -27,9 +27,9 @@ class Wx_Log
     public static $LOG_LEVEL = 0;
     public static $LOG_FILE = '';
     public static function INIT() {
-        if (defined('CCI_APP_LOG_FILE')) {
-            self::$LOG_LEVEL = Wx_LogLevel::DEBUG;  // default log_level
-            self::$LOG_FILE = CCI_APP_LOG_FILE;
+        if (defined('WX_APP_LOG_FILE')) {
+            self::$LOG_LEVEL = Wx_LogLevel::INFO;  // default log_level
+            self::$LOG_FILE = WX_APP_LOG_FILE;
         }
     }
     /**

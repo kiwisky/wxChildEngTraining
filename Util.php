@@ -18,14 +18,14 @@ class Util
             curl_setopt($ch, CURLOPT_USERPWD, $userpassword);
         }
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, strtoupper($method));
-        Wx_Log::debug(__METHOD__, "method: $method url: $url", __FILE__, __LINE__);
+        Wx_Log::debug(__METHOD__, "method: $method url: " . $url, __FILE__, __LINE__);
         if ($data) {
             if (is_array($data)) {
                 $data = self::my_json_encode($data, JSON_UNESCAPED_SLASHES);
                 // Elasticsearch 6 requires Content Type header be set "correctly" on PUTs.
                 curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));
             }
-            Wx_Log::info(__METHOD__, "data: $data", __FILE__, __LINE__);
+            Wx_Log::debug(__METHOD__, "data: " . $data, __FILE__, __LINE__);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
         }
         $response = curl_exec($ch);
@@ -33,9 +33,9 @@ class Util
         if (curl_errno($ch)) {
             $ret = false;
             $response = curl_error($ch);
-            Wx_Log::error(__METHOD__ . ":error:", $response, __FILE__, __LINE__);
+            Wx_Log::error(__METHOD__ , "error: " . $response, __FILE__, __LINE__);
         } else {
-            Wx_Log::debug(__METHOD__ . ":ok:", $response, __FILE__, __LINE__);
+            Wx_Log::debug(__METHOD__ , "ok: " . $response, __FILE__, __LINE__);
         }
         curl_close($ch);
         return $ret;
